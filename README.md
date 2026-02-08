@@ -292,17 +292,7 @@ server {
 }
 ```
 
-## 🎯 Resume Points
 
-This project demonstrates:
-
-- ✅ **Distributed Systems**: Multi-server architecture with Redis pub/sub
-- ✅ **Real-time Communication**: WebSocket implementation with sub-100ms latency
-- ✅ **Conflict Resolution**: CRDT-inspired approach for concurrent edits
-- ✅ **Scalability**: Horizontal scaling with load balancing
-- ✅ **Modern Stack**: React, FastAPI, Redis, PostgreSQL
-- ✅ **DevOps**: Docker, Docker Compose, containerized deployment
-- ✅ **API Design**: RESTful endpoints + WebSocket protocol
 
 ## 📝 Technical Decisions
 
@@ -326,22 +316,6 @@ This project demonstrates:
 - Excellent WebSocket support
 - Automatic API documentation
 - Type safety with Pydantic
+-               
 
-## 🤝 Contributing
 
-Contributions welcome! Please open an issue or PR.
-
-## 📄 License
-
-MIT License
-
-## 🙏 Acknowledgments
-
-- Monaco Editor by Microsoft
-- FastAPI by Sebastián Ramírez
-- Yjs CRDT library
-- Redis Labs
-
----
-
-**Built with ❤️ for learning distributed systems and real-time collaboration**
