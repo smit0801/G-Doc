@@ -1,4 +1,4 @@
-# 🚀 Distributed Real-Time Collaborative Editor
+# 🚀 G-Doc
 
 A production-grade collaborative code editor built with React, Python FastAPI, WebSockets, Redis, and Docker. Features real-time synchronization, conflict resolution, and horizontal scalability.
 
