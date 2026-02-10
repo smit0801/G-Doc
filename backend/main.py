@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -59,6 +59,21 @@ async def shutdown_event():
     """Clean up Redis connections on shutdown"""
     logger.info("👋 Shutting down...")
     await manager.disconnect_redis()
+
+# ==================== AUTH DEPENDENCY ====================
+
+async def get_current_user(authorization: str = Header(None)):
+    """Dependency to get current authenticated user"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    payload = verify_token(token)
+    
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    return payload
 
 # ==================== REST API Endpoints ====================
 
@@ -131,24 +146,18 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     }
 
 @app.post("/api/documents")
-async def create_document(doc_data: DocumentCreate, db: Session = Depends(get_db)):
-    """Create a new document (simplified - no auth for demo)"""
-    # For demo: create a default user if none exists
-    user = db.query(User).first()
-    if not user:
-        user = User(
-            username="demo_user",
-            email="demo@example.com",
-            hashed_password=get_password_hash("demo123")
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+async def create_document(
+    doc_data: DocumentCreate, 
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new document (authenticated users only)"""
+    user_id = int(current_user.get("sub"))
     
     new_doc = Document(
         title=doc_data.title,
         content=doc_data.content,
-        owner_id=user.id
+        owner_id=user_id
     )
     
     db.add(new_doc)
@@ -200,10 +209,11 @@ async def get_document(document_id: int, db: Session = Depends(get_db)):
 @app.put("/api/documents/{document_id}")
 async def update_document(
     document_id: int, 
-    doc_data: DocumentUpdate, 
+    doc_data: DocumentUpdate,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update document"""
+    """Update document (authenticated users only)"""
     doc = db.query(Document).filter(Document.id == document_id).first()
     
     if not doc:
@@ -227,20 +237,29 @@ async def update_document(
 async def websocket_endpoint(
     websocket: WebSocket,
     document_id: str,
-    user_id: Optional[str] = None
+    token: Optional[str] = None
 ):
     """
     WebSocket endpoint for real-time collaboration.
-    
-    Protocol:
-    - Client sends: {"type": "update", "data": {...}}
-    - Server broadcasts to others: {"type": "update", "user_id": "...", "data": {...}}
+    Requires authentication token.
     """
     
-    # Generate user_id if not provided (for demo purposes)
-    if not user_id:
-        import uuid
-        user_id = f"user_{uuid.uuid4().hex[:8]}"
+    # Verify token
+    if not token:
+        await websocket.close(code=1008, reason="Missing token")
+        logger.warning(f"WebSocket connection rejected: Missing token")
+        return
+    
+    payload = verify_token(token)
+    if not payload:
+        await websocket.close(code=1008, reason="Invalid token")
+        logger.warning(f"WebSocket connection rejected: Invalid token")
+        return
+    
+    user_id = payload.get("sub")
+    username = payload.get("username", user_id)
+    
+    logger.info(f"✅ User {username} (ID: {user_id}) authenticated for document {document_id}")
     
     # Connect to WebSocket
     await manager.connect(websocket, document_id, user_id)
@@ -251,6 +270,7 @@ async def websocket_endpoint(
         {
             "type": "init",
             "user_id": user_id,
+            "username": username,
             "active_users": active_users
         },
         websocket
@@ -262,7 +282,7 @@ async def websocket_endpoint(
             data = await websocket.receive_text()
             message = json.loads(data)
             
-            logger.info(f"📨 Received from {user_id}: {message.get('type', 'unknown')}")
+            logger.info(f"📨 Received from {username}: {message.get('type', 'unknown')}")
             
             # Handle different message types
             msg_type = message.get("type")
@@ -274,6 +294,7 @@ async def websocket_endpoint(
                     {
                         "type": "update",
                         "user_id": user_id,
+                        "username": username,
                         "data": message.get("data", {}),
                         "timestamp": message.get("timestamp")
                     },
@@ -287,6 +308,7 @@ async def websocket_endpoint(
                     {
                         "type": "cursor",
                         "user_id": user_id,
+                        "username": username,
                         "position": message.get("position"),
                         "selection": message.get("selection")
                     },
@@ -300,6 +322,7 @@ async def websocket_endpoint(
                     {
                         "type": "awareness",
                         "user_id": user_id,
+                        "username": username,
                         "data": message.get("data")
                     },
                     exclude_user=user_id
@@ -313,11 +336,12 @@ async def websocket_endpoint(
             document_id,
             {
                 "type": "user_left",
-                "user_id": user_id
+                "user_id": user_id,
+                "username": username
             }
         )
         
-        logger.info(f"👋 User {user_id} disconnected from document {document_id}")
+        logger.info(f"👋 User {username} disconnected from document {document_id}")
     
     except Exception as e:
         logger.error(f"❌ WebSocket error: {e}")

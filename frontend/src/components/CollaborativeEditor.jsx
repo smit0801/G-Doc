@@ -1,27 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
-import { MonacoBinding } from 'y-monaco';
 import './CollaborativeEditor.css';
 
 const CollaborativeEditor = ({ documentId, userId }) => {
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
-  const [ydoc] = useState(() => new Y.Doc());
   const [provider, setProvider] = useState(null);
-  const [binding, setBinding] = useState(null);
   const [activeUsers, setActiveUsers] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     if (!documentId) return;
 
-    // Create WebSocket provider for Yjs
-    // Note: y-websocket expects a y-websocket server, but we'll adapt our custom WebSocket
-    // For this demo, we'll use a custom WebSocket connection
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
     
-    const wsUrl = `ws://localhost:8000/ws/${documentId}?user_id=${userId}`;
+    if (!token) {
+      console.error('❌ No token found. Please login first.');
+      return;
+    }
+
+    // Create WebSocket connection WITH token
+    const wsUrl = `ws://localhost:8000/ws/${documentId}?token=${token}`;
+    console.log('🔌 Connecting to:', wsUrl);
+    
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -59,9 +61,16 @@ const CollaborativeEditor = ({ documentId, userId }) => {
       }
     };
 
-    ws.onclose = () => {
-      console.log('❌ WebSocket disconnected');
+    ws.onclose = (event) => {
+      console.log('❌ WebSocket disconnected:', event.reason);
       setIsConnected(false);
+      
+      // Show reason if connection was rejected
+      if (event.code === 1008) {
+        alert(`Connection failed: ${event.reason}\nPlease login again.`);
+        localStorage.removeItem('token');
+        window.location.reload();
+      }
     };
 
     ws.onerror = (error) => {
@@ -77,7 +86,7 @@ const CollaborativeEditor = ({ documentId, userId }) => {
         ws.close();
       }
     };
-  }, [documentId, userId, ydoc]);
+  }, [documentId]);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
