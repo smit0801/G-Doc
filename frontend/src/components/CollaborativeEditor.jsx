@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import Chat from './Chat';
 import './CollaborativeEditor.css';
 
 const CollaborativeEditor = ({ documentId, userId }) => {
@@ -8,12 +9,16 @@ const CollaborativeEditor = ({ documentId, userId }) => {
   const [provider, setProvider] = useState(null);
   const [activeUsers, setActiveUsers] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [username, setUsername] = useState('');
+  const chatMessageCallback = useRef(null);
 
   useEffect(() => {
     if (!documentId) return;
 
     // Get token from localStorage
     const token = localStorage.getItem('token');
+    const storedUsername = localStorage.getItem('username') || 'Anonymous';
+    setUsername(storedUsername);
     
     if (!token) {
       console.error('❌ No token found. Please login first.');
@@ -56,6 +61,13 @@ const CollaborativeEditor = ({ documentId, userId }) => {
             if (message.data.content && message.data.content !== currentValue) {
               editorRef.current.setValue(message.data.content);
             }
+          }
+          break;
+        
+        case 'chat':
+          // Pass chat messages to Chat component via callback
+          if (chatMessageCallback.current) {
+            chatMessageCallback.current(message);
           }
           break;
       }
@@ -177,6 +189,14 @@ const CollaborativeEditor = ({ documentId, userId }) => {
           }}
         />
       </div>
+      
+      {/* Chat Component */}
+      <Chat 
+        websocket={provider?.ws} 
+        username={username}
+        isConnected={isConnected}
+        onChatMessage={chatMessageCallback}
+      />
     </div>
   );
 };

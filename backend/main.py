@@ -261,17 +261,19 @@ async def websocket_endpoint(
     
     logger.info(f"✅ User {username} (ID: {user_id}) authenticated for document {document_id}")
     
-    # Connect to WebSocket
+    # Get current active users BEFORE connecting (so new user isn't included)
+    active_users = manager.get_active_users(document_id)
+    
+    # Connect to WebSocket (adds user to active list)
     await manager.connect(websocket, document_id, user_id)
     
-    # Send current active users to the new user
-    active_users = manager.get_active_users(document_id)
+    # Send list of OTHER active users to the new user
     await manager.send_personal_message(
         {
             "type": "init",
             "user_id": user_id,
             "username": username,
-            "active_users": active_users
+            "active_users": active_users  # Doesn't include current user yet
         },
         websocket
     )
@@ -326,6 +328,21 @@ async def websocket_endpoint(
                         "data": message.get("data")
                     },
                     exclude_user=user_id
+                )
+            
+            elif msg_type == "chat":
+                # Broadcast chat message to OTHER users (not sender)
+                import time
+                await manager.broadcast_to_document(
+                    document_id,
+                    {
+                        "type": "chat",
+                        "user_id": user_id,
+                        "username": username,
+                        "message": message.get("message"),
+                        "timestamp": time.time()
+                    },
+                    exclude_user=user_id  # Don't send back to sender
                 )
     
     except WebSocketDisconnect:

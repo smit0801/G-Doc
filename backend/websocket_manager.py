@@ -1,3 +1,4 @@
+import uuid
 import json
 import asyncio
 import redis.asyncio as aioredis
@@ -27,6 +28,7 @@ class ConnectionManager:
         
         # Track which documents this server instance is subscribed to
         self.subscribed_documents: Set[str] = set()
+        self.server_id = str(uuid.uuid4()) # Unique ID for this server instance (for debugging/logging)
         
     async def connect_redis(self):
         """Initialize Redis connection for pub/sub"""
@@ -127,6 +129,7 @@ class ConnectionManager:
         """Publish message to Redis channel"""
         try:
             redis_message = {
+                "server_id": self.server_id,
                 "message": message,
                 "exclude_user": exclude_user
             }
@@ -160,6 +163,8 @@ class ConnectionManager:
                 if message["type"] == "message":
                     try:
                         data = json.loads(message["data"])
+                        if data.get("server_id") == self.server_id:
+                            continue  # Ignore messages from self
                         msg = data["message"]
                         exclude_user = data.get("exclude_user")
                         
