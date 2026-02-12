@@ -312,7 +312,6 @@ curl http://localhost:8000/api/documents/1
 2. **Collaborate**
    - Start typing - changes sync in <100ms
    - See active users in the header
-   - Watch live cursor positions
    - Use chat to communicate
 
 3. **Auto-Save**
@@ -327,7 +326,7 @@ curl http://localhost:8000/api/documents/1
    
 2. **Send Messages**
    - Type your message
-   - Press Enter or click "Send"
+   - Press Enter or click "Send" or hit "enter"
    - Message appears instantly for you
    - Broadcasts to other users
 
@@ -517,7 +516,7 @@ WS /ws/{document_id}?token={jwt_token}
 - **Database Writes**: <50ms per save
 - **WebSocket Handshake**: <100ms
 
-### Scalability
+### Scalability (Undergoing Testing)
 - **Concurrent Users per Document**: 50+ tested
 - **Users per Backend Instance**: ~500 concurrent
 - **Backend Instances**: Unlimited (horizontal scaling)
