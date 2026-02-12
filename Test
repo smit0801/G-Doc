@@ -1,0 +1,61 @@
+import pytest
+import asyncio
+from unittest.mock import MagicMock, patch
+from document_persistence import DocumentPersistenceManager
+from models import Document
+
+
+#  proves i don't spam the DB on every keystroke.
+
+@pytest.mark.asyncio
+@patch("document_persistence.SessionLocal")
+async def test_buffer_and_flush_architecture(mock_session_factory):
+    """
+    Test that the persistence manager:
+    1. Buffers updates in memory (ZERO DB writes).
+    2. Flushes to DB only when triggered.
+    3. Optimizes by skipping 'clean' documents.
+    """
+    # --- SETUP ---
+    # Mock the database session so we don't need Postgres running
+    mock_db = MagicMock()
+    mock_session_factory.return_value = mock_db
+    
+    # Mock a database document object
+    existing_doc = Document(id=1, title="Test", content="Old Content")
+    mock_db.query.return_value.filter.return_value.first.return_value = existing_doc
+
+    # Initialize Manager
+    manager = DocumentPersistenceManager(save_interval=30)
+    doc_id = "1"
+    new_content = "Hello FAANG Recruiter!"
+
+    # --- PHASE 1: BUFFERING (The "Write-Behind") ---
+    print("\n[Step 1] Simulating user typing...")
+    manager.update_document(doc_id, new_content)
+
+    # Assertions:
+    assert manager.get_cached_content(doc_id) == new_content
+    assert manager.dirty_documents[doc_id] is True
+    # CRITICAL: Prove DB commit was NOT called yet
+    mock_db.commit.assert_not_called() 
+    print("✅ Passed: Updates buffered in memory. No DB load.")
+
+    # --- PHASE 2: FLUSHING (The Persistence) ---
+    print("[Step 2] Triggering background save...")
+    await manager.save_all_dirty_documents()
+
+    # Assertions:
+    assert existing_doc.content == new_content # DB object updated
+    mock_db.commit.assert_called_once()        # DB transaction committed
+    assert manager.dirty_documents[doc_id] is False # Doc marked clean
+    print("✅ Passed: Buffer flushed to PostgreSQL.")
+
+    # --- PHASE 3: OPTIMIZATION (Idempotency) ---
+    print("[Step 3] Triggering save again (should be no-op)...")
+    mock_db.commit.reset_mock()
+    await manager.save_all_dirty_documents()
+
+    # Assertions:
+    mock_db.commit.assert_not_called() # Should NOT touch DB
+    print("✅ Passed: Clean documents skipped to save resources.")
