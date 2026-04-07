@@ -9,7 +9,7 @@ A production-grade collaborative code editor with real-time chat, built with Rea
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ed)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791)
 
-## ✨ Features
+## ✨ Features-
 
 ### 🎯 Core Collaboration
 - **Real-Time Editing**: Multiple users edit simultaneously with <100ms latency
